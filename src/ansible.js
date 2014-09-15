@@ -45,14 +45,14 @@ angular.module("ansible", [])
 
 				if (initialized) {
 
-					var Ansible = function (room, callback) {
+					var Ansible = function (channel, callback) {
 
-						this.room = room;
+						this.channel = channel;
 						this.data = null;
 
-						// request to join room, which will also trigger a data update
-						console.log("joining room: " + this.room);
-						emit("ansible:joinroom", this.room);
+						// request to join channel, which will also trigger a data update
+						console.log("Subscribing: " + this.channel);
+						emit("ansible:subscribe", this.channel);
 
 						return this;
 
@@ -60,17 +60,17 @@ angular.module("ansible", [])
 
 					Ansible.prototype.get = function () {
 						// request the remote model data
+						emit("ansible:get", this.channel);
 					};
 
 					Ansible.prototype.save = function () {
 						// send the local model data
+						emit("ansible:update", this.data);
 					};
 
 					return Ansible;
 
-				}
-
-				else throw "Ansible has not been initialized.";
+				} else throw "Ansible has not been initialized.";
 
 			}
 
