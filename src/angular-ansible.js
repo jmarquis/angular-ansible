@@ -34,6 +34,7 @@ angular.module("ansible", [])
 					socket.on("connect", processQueue);
 
 					socket.on("ansible:update", function (message) {
+						console.log("Incoming update: ", message);
 						if (ansibles[message.channel]) {
 							ansibles[message.channel].setData(message.data);
 						}
@@ -48,11 +49,12 @@ angular.module("ansible", [])
 
 				if (initialized) {
 
-					var Ansible = function (channel, callback) {
+					var Ansible = function (channel) {
 
 						var _ = this;
 						this.channel = channel;
 						this.data = null;
+						this.dataInitialized = false;
 
 						// request to join channel, which will also trigger a data update
 						console.log("Subscribing: " + this.channel);
@@ -60,7 +62,9 @@ angular.module("ansible", [])
 
 						$rootScope.$watch(function () {
 							return _.data;
-						}, _.save);
+						}, function () {
+							_.save();
+						}, typeof _.data === "object");
 
 						ansibles[channel] = this;
 						return this;
@@ -73,12 +77,14 @@ angular.module("ansible", [])
 					};
 
 					Ansible.prototype.save = function () {
-						// send the local model data
-						console.log("saving", { channel: this.channel, data: this.data });
-						emit("ansible:update", {
-							channel: this.channel,
-							data: this.data
-						});
+						if (this.dataInitialized) {
+							// send the local model data
+							console.log("saving", this);
+							emit("ansible:update", {
+								channel: this.channel,
+								data: this.data
+							});
+						}
 					};
 
 					Ansible.prototype.getData = function () {
@@ -86,9 +92,11 @@ angular.module("ansible", [])
 					};
 
 					Ansible.prototype.setData = function (data) {
-						this.data = data;
+						var _ = this;
+						setTimeout(function () { _.dataInitialized = true; }, 1);
+						this.data = angular.copy(data);
 						$rootScope.$digest();
-					}
+					};
 
 					return Ansible;
 
