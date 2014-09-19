@@ -41,10 +41,10 @@ angular.module("ansible", [])
 
 			angular.forEach(routeTemplate, function (segment, index) {
 				if (segment === "") noop();
-				else if (segment.charAt(0) !== ":") regex += segment + "/";
+				else if (segment.charAt(0) !== ":") regex += "/" + segment;
 				else {
 					var required = segment.charAt(segment.length - 1) !== "?";
-					regex += required ? ":([^/]+)/" : "(:([^/]+)/)?";
+					regex += required ? "(/[^/]+)" : "(/[^/]+)?";
 					paramNames.push({
 						name: segment.substring(1, required ? segment.length : segment.length - 1),
 						required: required
@@ -52,8 +52,6 @@ angular.module("ansible", [])
 				}
 			});
 
-			if (regex.charAt(regex.length - 1) === "/") regex = regex.slice(0, -1);
-			else if (regex.slice(-3) === "/)?") regex = regex.slice(0, -3) + ")?";
 			regex += "$";
 
 			console.log(regex);
