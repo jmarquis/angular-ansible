@@ -5,7 +5,16 @@ angular.module("ansible", [])
 		var socket,
 			initialized = false,
 			queue = [],
-			ansibles = {};
+			ansibles = {},
+			defaults = {
+				actionMethods: {
+					"get": { actions: "ansible:get" },
+					"query": { actions: "ansible:query", isArray: true },
+					"save": { actions: "ansible:save" },
+					"delete": { actions: "ansible:delete" }
+				}
+			},
+			noop = function () {};
 
 		var emit = function (name, data, callback) {
 			if (socket && socket.connected) {
@@ -22,6 +31,45 @@ angular.module("ansible", [])
 					socket.emit(message.name, message.data, message.callback);
 				}
 			}
+		};
+
+		var parseUrlString = function (urlString) {
+
+			var routeTemplate = urlString.split("/");
+			var regex = "^";
+			var paramNames = [];
+
+			angular.forEach(routeTemplate, function (segment, index) {
+				if (segment === "") noop();
+				else if (segment.charAt(0) !== ":") regex += segment + "/";
+				else {
+					var required = segment.charAt(segment.length - 1) !== "?";
+					regex += required ? ":([^/]+)/" : "(:([^/]+)/)?";
+					paramNames.push({
+						name: segment.substring(1, required ? segment.length : segment.length - 1),
+						required: required
+					});
+				}
+			});
+
+			if (regex.charAt(regex.length - 1) === "/") regex = regex.slice(0, -1);
+			else if (regex.slice(-3) === "/)?") regex = regex.slice(0, -3) + ")?";
+			regex += "$";
+
+			console.log(regex);
+
+			return {
+				match: function (route) {
+					console.log("");
+				},
+				fill: function (params) {
+
+				}
+			};
+			var paramNames = urlString.match(/\:[^/]+/g);
+			angular.forEach(paramNames, function (name, index) {
+				paramNames[index] = name.substring(1);
+			});
 		};
 
 		this.init = function (_socket_) {
@@ -49,13 +97,27 @@ angular.module("ansible", [])
 
 				var Ansible = function (urlString, defaultParams, customActions) {
 
-					this.urlString = urlString;
-					this.defaultParams = angular.copy(defaultParams);
-					this.customActions = angular.copy(customActions);
+					var Type = function (params) {
 
-					return this;
+						angular.extend(this, params);
+
+						return this;
+
+					};
+
+					Type.route = parseUrlString(urlString);
+					Type.defaultParams = angular.copy(defaultParams);
+
+					angular.forEach(angular.extend({}, defaults.actionMethods, customActions), function (actionMethod, method) {
+						Type.prototype["$" + method] = function (params, callback) {
+
+						};
+					});
+
+					return Type;
 
 				};
+
 
 
 
