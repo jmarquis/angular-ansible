@@ -1,2 +1,6 @@
 *.sublime-project
 *.sublime-workspace
+/bower_components
+/node_modules
+/build
+/temp-scripts

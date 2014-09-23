@@ -1,9 +1,8 @@
 {
-  "name": "MODULE",
+  "name": "angular-ansible",
   "version": "0.1.0",
-  "author": "YOURNAME",
-  "license": "LICENSE",
-  "private": true,
+  "author": "Jeremy Marquis",
+  "license": "MIT",
   "devDependencies": {
     "bower": "~1.3.8",
     "gulp-concat": "~2.3.4",
@@ -15,10 +14,6 @@
     "karma-jasmine": "~0.1.5",
     "karma-phantomjs-launcher": "~0.1.4",
     "moment": "~2.8.1",
-    "express": "~4.7.2",
-    "gulp": "~3.8.6"
-  },
-  "dependencies": {
     "express": "~4.7.2",
     "gulp": "~3.8.6"
   }

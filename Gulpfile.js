@@ -37,20 +37,20 @@ gulp.task("lib-scripts", function () {
 
 });
 
-gulp.task("app-scripts", function () {
+gulp.task("module-scripts", function () {
 
 	return gulp.src(scripts.app)
 		.pipe(ngAnnotate())
-		.pipe(concat("app.js"))
+		.pipe(concat("module.js"))
 		.pipe(gulp.dest("./temp-scripts/"));
 
 });
 
-gulp.task("build", ["lib-scripts", "app-scripts"], function () {
+gulp.task("build", ["lib-scripts", "module-scripts"], function () {
 
 	gulp.src([
 		"./temp-scripts/libs.js",
-		"./temp-scripts/app.js"
+		"./temp-scripts/module.js"
 	])
 		.pipe(concat(pkg.name + ".js"))
 		.pipe(header([
@@ -92,15 +92,14 @@ gulp.task("run", function () {
 
 	var app = express();
 	app.use(express.static(__dirname + "/build"));
-	app.listen(29017);
+	app.listen(29020);
 	console.log("Server running on localhost:29017");
 
 });
 
 gulp.task("watch", ["build"], function () {
 
-	gulp.watch(scripts.app, ["scripts"]);
-	gulp.watch(styles, ["styles"]);
+	gulp.watch(scripts.app, ["build"]);
 	gulp.watch("./src/**/*.html", ["index", "views"]);
 	gulp.on("stop", function () {
 		setTimeout(function () {

@@ -5,19 +5,11 @@ angular.module("ansible", [])
 		var socket,
 			initialized = false,
 			queue = [],
-			ansibles = {},
-			defaults = {
-				actionMethods: {
-					"get": { actions: "ansible:get" },
-					"query": { actions: "ansible:query", isArray: true },
-					"save": { actions: "ansible:save" },
-					"delete": { actions: "ansible:delete" }
-				}
-			},
-			noop = function () {};
+			instances = {};
 
 		var emit = function (name, data, callback) {
 			if (socket && socket.connected) {
+				console.log("Emitting:", name, data);
 				socket.emit(name, data, callback);
 			} else {
 				queue.push({ name: name, data: data, callback: callback });
@@ -28,46 +20,10 @@ angular.module("ansible", [])
 			if (socket && socket.connected) {
 				while (queue.length > 0) {
 					var message = queue.shift();
+					console.log("Emitting (queued):", message.name, message.data);
 					socket.emit(message.name, message.data, message.callback);
 				}
 			}
-		};
-
-		var parseUrlString = function (urlString) {
-
-			var routeTemplate = urlString.split("/");
-			var regex = "^";
-			var paramNames = [];
-
-			angular.forEach(routeTemplate, function (segment, index) {
-				if (segment === "") noop();
-				else if (segment.charAt(0) !== ":") regex += "/" + segment;
-				else {
-					var required = segment.charAt(segment.length - 1) !== "?";
-					regex += required ? "(/[^/]+)" : "(/[^/]+)?";
-					paramNames.push({
-						name: segment.substring(1, required ? segment.length : segment.length - 1),
-						required: required
-					});
-				}
-			});
-
-			regex += "$";
-
-			console.log(regex);
-
-			return {
-				match: function (route) {
-					console.log("");
-				},
-				fill: function (params) {
-
-				}
-			};
-			var paramNames = urlString.match(/\:[^/]+/g);
-			angular.forEach(paramNames, function (name, index) {
-				paramNames[index] = name.substring(1);
-			});
 		};
 
 		this.init = function (_socket_) {
@@ -78,9 +34,9 @@ angular.module("ansible", [])
 				socket.on("connect", processQueue);
 
 				socket.on("ansible:update", function (message) {
-					console.log("Incoming update: ", message);
-					if (ansibles[message.channel]) {
-						ansibles[message.channel].setData(message.data);
+					console.log("Incoming update:", message);
+					if (instances[message.channel]) {
+						instances[message.channel].setData(message.data);
 					}
 				});
 
@@ -93,80 +49,113 @@ angular.module("ansible", [])
 
 			if (initialized) {
 
-				var Ansible = function (urlString, defaultParams, customActions) {
+				var wrapCallback = function (callback) {
+					return function () {
+						if (callback) {
+							callback.apply(undefined, arguments);
+							$rootScope.$apply();
+						}
+					};
+				}
 
-					var Type = function (params) {
+				var Ansible = function (url, defaultProperties) {
 
-						angular.extend(this, params);
+					var Type = function (properties) {
+
+						var _ = this;
+						this.$$live = false;
+
+						angular.extend(this, Type.defaultProperties, properties);
+
+						console.log("Subscribing");
+						emit("ansible:subscribe", this.getChannel());
+						instances[this.getChannel()] = this;
+
+						$rootScope.$watch(function () {
+							return _.getProperties();
+						}, function () {
+							console.log("UPDATE!", _.$$live, _.getProperties());
+							_.$save();
+						}, true);
 
 						return this;
 
 					};
 
-					Type.route = parseUrlString(urlString);
-					Type.defaultParams = angular.copy(defaultParams);
+					Type.route = new Route(url);
+					Type.defaultProperties = angular.copy(defaultProperties);
 
-					angular.forEach(angular.extend({}, defaults.actionMethods, customActions), function (actionMethod, method) {
-						Type.prototype["$" + method] = function (params, callback) {
+					Type.get = function (params, callback) {
+						var instance = new Type(params);
+						instance.$get(params, wrapCallback(callback));
+						return instance;
+					};
 
-						};
-					});
+					Type.query = function (params) {
+						// TODO
+					};
+
+					Type.delete = function (params, callback) {
+						emit("ansible:delete", {
+							channel: Type.route.fill(angular.extend({}, Type.defaultProperties, params))
+						}, wrapCallback(callback));
+					};
+
+					Type.prototype.getProperties = function () {
+						var properties = {};
+						angular.forEach(this, function (propertyValue, propertyName) {
+							if (!/(\$|\_)/.test(propertyName.charAt(0)) && typeof propertyValue !== "function") properties[propertyName] = propertyValue;
+						});
+						return properties;
+					};
+
+					Type.prototype.getChannel = function (params) {
+						params = params ? params : {};
+						return Type.route.fill(angular.extend({}, this.getProperties(), params));
+					};
+
+					Type.prototype.setData = function (data) {
+						console.log("Setting data:", data);
+						var _ = this;
+						this.$$live = false;
+						angular.extend(this, data);
+						$rootScope.$apply();
+						setTimeout(function () { _.$$live = true; }, 1);
+					};
+
+					Type.prototype.$get = function (params, callback) {
+						var channel = this.getChannel(params);
+						if (channel) {
+							emit("ansible:get", {
+								channel: channel
+							}, wrapCallback(callback));
+						}
+					};
+
+					Type.prototype.$save = function (params, callback) {
+						if (this.$$live) {
+							var channel = this.getChannel(params);
+							if (channel) {
+								emit("ansible:update", {
+									channel: channel,
+									data: this.getProperties()
+								}, wrapCallback(callback));
+							}
+						}
+					};
+
+					Type.prototype.$delete = function (params, callback) {
+						var channel = this.getChannel(params);
+						if (channel) {
+							emit("ansible:delete", {
+								channel: channel
+							}, wrapCallback(callback));
+							delete this;
+						}
+					};
 
 					return Type;
 
-				};
-
-
-
-
-
-				var Ansible = function (channel) {
-
-					var _ = this;
-					this.channel = channel;
-					this.data = null;
-					this.dataInitialized = false;
-
-					// request to join channel, which will also trigger a data update
-					console.log("Subscribing: " + this.channel);
-					emit("ansible:subscribe", this.channel);
-
-					$rootScope.$watch(function () {
-						return _.data;
-					}, function () {
-						_.save();
-					}, typeof _.data === "object");
-
-					ansibles[channel] = this;
-					return this;
-
-				};
-
-				Ansible.prototype.get = function () {
-					// request the remote model data
-					emit("ansible:get", this.channel);
-				};
-
-				Ansible.prototype.save = function () {
-					if (this.dataInitialized) {
-						// send the local model data
-						console.log("saving", this);
-						emit("ansible:update", {
-							channel: this.channel,
-							data: this.data
-						});
-					}
-				};
-
-				Ansible.prototype.getData = function () {
-					return this.data;
-				};
-
-				Ansible.prototype.setData = function (data) {
-					var _ = this;
-					setTimeout(function () { _.dataInitialized = true; }, 1);
-					this.data = angular.copy(data);
-					$rootScope.$digest();
 				};
 
 				return Ansible;
@@ -179,8 +168,8 @@ angular.module("ansible", [])
 
 	.factory("ansible", function (Ansible) {
 
-		return function (url, defaultParams, customActions) {
-			return new Ansible(url);
+		return function (url, defaultProperties) {
+			return new Ansible(url, defaultProperties);
 		};
 
 	});
